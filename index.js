@@ -1,102 +1,114 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
-const OpenAI = require('openai');
+const axios = require('axios');
 
 const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-const openai = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: 'https://api.deepseek.com/v1',
-});
+const YANDEX_API_KEY = process.env.YANDEX_API_KEY;
+const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID;
 
-const MODEL = 'deepseek-chat';
+// --- YANDEXGPT ЗАПРОС ---
 
-async function generateConceptAndHooks(idea) {
-  const response = await openai.chat.completions.create({
-    model: MODEL,
+async function callYandexGPT(prompt) {
+  const url = 'https://llm.api.cloud.yandex.net/yandexgpt/v1/completion';
+  
+  const response = await axios.post(url, {
+    model: 'yandexgpt',
     messages: [
       {
         role: 'system',
-        content: `
-          Ты — эксперт по Instagram Reels.
-          Определи для идеи пользователя:
-          1. Концепцию (одна фраза, суть)
-          2. Формат (Talking Head / Faceless / Storytelling)
-          3. Длительность (10-15 сек / 20-30 сек / 30-45 сек)
-          4. Стиль (Разговорный / Экспертный / Дерзкий)
-          
-          Сгенерируй 3 разных хука:
-          1. Контрарный
-          2. Curiosity
-          3. Прямой
-          
-          Верни ТОЛЬКО JSON без пояснений:
-          {
-            "concept": "...",
-            "format": "...",
-            "duration": "...",
-            "style": "...",
-            "hooks": [
-              { "type": "Контрарный", "text": "...", "why": "..." },
-              { "type": "Curiosity", "text": "...", "why": "..." },
-              { "type": "Прямой", "text": "...", "why": "..." }
-            ]
-          }
-        `
+        text: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.'
       },
-      { role: 'user', content: idea }
+      {
+        role: 'user',
+        text: prompt
+      }
     ],
     temperature: 0.8,
-    max_tokens: 1500
+    maxTokens: 2000
+  }, {
+    headers: {
+      'Authorization': `Api-Key ${YANDEX_API_KEY}`,
+      'x-folder-id': YANDEX_FOLDER_ID,
+      'Content-Type': 'application/json'
+    }
   });
 
-  const content = response.choices[0].message.content;
-  return JSON.parse(content);
+  return response.data.result.alternatives[0].message.text;
 }
 
-async function generateReelsPackage(data) {
-  const response = await openai.chat.completions.create({
-    model: MODEL,
-    messages: [
-      {
-        role: 'system',
-        content: `
-          Ты — эксперт по Instagram Reels.
-          Создай READY-TO-SHOOT PACKAGE:
-          
-          Идея: ${data.idea}
-          Концепция: ${data.concept}
-          Формат: ${data.format}
-          Длительность: ${data.duration}
-          Стиль: ${data.style}
-          Хук: ${data.hook}
-          
-          Верни ТОЛЬКО JSON:
-          {
-            "title": "...",
-            "scenes": [
-              { "visual": "...", "audio": "...", "text_on_screen": "..." }
-            ],
-            "script": "...",
-            "cta": "...",
-            "caption": "...",
-            "cover": ["...", "...", "..."],
-            "verdict": "...",
-            "weakness": "..."
-          }
-          
-          Речь как живой человек. Кадры выполнимы со смартфоном. Никаких AI-клише.
-        `
-      },
-      { role: 'user', content: data.idea }
-    ],
-    temperature: 0.7,
-    max_tokens: 4000
-  });
+// --- ГЕНЕРАЦИЯ КОНЦЕПЦИИ И ХУКОВ ---
 
-  const content = response.choices[0].message.content;
-  return JSON.parse(content);
+async function generateConceptAndHooks(idea) {
+  const prompt = `
+    Определи для идеи пользователя:
+    1. Концепцию (одна фраза, суть)
+    2. Формат (Talking Head / Faceless / Storytelling)
+    3. Длительность (10-15 сек / 20-30 сек / 30-45 сек)
+    4. Стиль (Разговорный / Экспертный / Дерзкий)
+    
+    Сгенерируй 3 разных хука:
+    1. Контрарный (ломает стереотип)
+    2. Curiosity (создаёт вопрос)
+    3. Прямой (личное обращение)
+    
+    Верни ТОЛЬКО JSON без пояснений:
+    {
+      "concept": "...",
+      "format": "...",
+      "duration": "...",
+      "style": "...",
+      "hooks": [
+        { "type": "Контрарный", "text": "...", "why": "..." },
+        { "type": "Curiosity", "text": "...", "why": "..." },
+        { "type": "Прямой", "text": "...", "why": "..." }
+      ]
+    }
+    
+    Идея: ${idea}
+  `;
+
+  const result = await callYandexGPT(prompt);
+  return JSON.parse(result);
+}
+
+// --- ГЕНЕРАЦИЯ ГОТОВОГО ПАКЕТА ---
+
+async function generateReelsPackage(data) {
+  const prompt = `
+    Создай READY-TO-SHOOT PACKAGE для Instagram Reels:
+    
+    Идея: ${data.idea}
+    Концепция: ${data.concept}
+    Формат: ${data.format}
+    Длительность: ${data.duration}
+    Стиль: ${data.style}
+    Хук: ${data.hook}
+    
+    Верни ТОЛЬКО JSON:
+    {
+      "title": "...",
+      "scenes": [
+        { "visual": "...", "audio": "...", "text_on_screen": "..." }
+      ],
+      "script": "...",
+      "cta": "...",
+      "caption": "...",
+      "cover": ["...", "...", "..."],
+      "verdict": "...",
+      "weakness": "..."
+    }
+    
+    Требования:
+    - Речь как живой человек, не как статья
+    - Кадры выполнимы со смартфоном
+    - Никаких AI-клише
+    - Не обещай вирусность
+  `;
+
+  const result = await callYandexGPT(prompt);
+  return JSON.parse(result);
 }
 
 // --- КОМАНДЫ БОТА ---
@@ -109,7 +121,22 @@ bot.onText(/\/start/, async (msg) => {
     `Просто напиши, что хочешь снять.\n\n` +
     `*Примеры:*\n` +
     `📱 "Как перестать откладывать"\n` +
-    `💼 "Кейс из моей практики"`,
+    `💼 "Кейс из моей практики"\n` +
+    `🔥 "Ошибка, которую я совершал"`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+bot.onText(/\/help/, async (msg) => {
+  const chatId = msg.chat.id;
+  await bot.sendMessage(chatId,
+    `📖 *Как пользоваться:*\n\n` +
+    `1. Напиши идею для Reels\n` +
+    `2. Выбери хук из трёх вариантов\n` +
+    `3. Получи готовый план: Shot List, сценарий, CTA, обложки\n\n` +
+    `*Команды:*\n` +
+    `/start — приветствие\n` +
+    `/help — помощь`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -150,7 +177,7 @@ bot.on('message', async (msg) => {
     userStates.set(chatId, { idea: text, conceptData });
 
   } catch (error) {
-    console.error(error);
+    console.error('Error:', error);
     await bot.sendMessage(chatId, '❌ Ошибка. Попробуй ещё раз.');
   }
 });
@@ -162,7 +189,10 @@ bot.on('callback_query', async (callbackQuery) => {
   if (data.startsWith('hook_')) {
     const idx = parseInt(data.split('_')[1]);
     const state = userStates.get(chatId);
-    if (!state) return;
+    if (!state) {
+      await bot.sendMessage(chatId, '❌ Начни сначала: напиши идею.');
+      return;
+    }
 
     const hook = state.conceptData.hooks[idx];
     await bot.answerCallbackQuery(callbackQuery.id);
@@ -179,7 +209,7 @@ bot.on('callback_query', async (callbackQuery) => {
         hook: hook.text
       });
 
-      let response = `🎬 *READY TO SHOOT*\n\n*"${pkg.title}"*\n\n`;
+      let response = `🎬 *READY TO SHOOT*\n\n*"${pkg.title || state.conceptData.concept}"*\n\n`;
       response += `*📋 SHOT LIST*\n\n`;
       pkg.scenes.forEach((scene, i) => {
         response += `*${String(i+1).padStart(2, '0')}*\n`;
@@ -192,15 +222,99 @@ bot.on('callback_query', async (callbackQuery) => {
       response += `*📄 FULL SCRIPT*\n\n"${pkg.script}"\n\n`;
       response += `*🎯 CTA*\n${pkg.cta}\n\n`;
       response += `*📝 CAPTION*\n${pkg.caption}\n\n`;
-      response += `*🎨 COVER*\n${pkg.cover.map((c,i) => `${i+1}. "${c}"`).join('\n')}\n\n`;
+      response += `*🎨 COVER (3 варианта)*\n${pkg.cover.map((c,i) => `${i+1}. "${c}"`).join('\n')}\n\n`;
       response += `*💡 VERDICT*\n${pkg.verdict}`;
 
-      await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+      const buttons = {
+        inline_keyboard: [
+          [
+            { text: '📋 Копировать', callback_data: 'copy' },
+            { text: '💾 Сохранить', callback_data: 'save' }
+          ],
+          [
+            { text: '🔨 Сделать сильнее', callback_data: 'strengthen' },
+            { text: '🔄 Новый Reels', callback_data: 'new' }
+          ]
+        ]
+      };
+
+      await bot.sendMessage(chatId, response, {
+        parse_mode: 'Markdown',
+        reply_markup: buttons
+      });
+
+      userStates.set(chatId, { ...state, packageData: pkg });
 
     } catch (error) {
-      console.error(error);
-      await bot.sendMessage(chatId, '❌ Ошибка при создании Reels.');
+      console.error('Error:', error);
+      await bot.sendMessage(chatId, '❌ Ошибка при создании Reels. Попробуй ещё раз.');
     }
+  }
+
+  if (data === 'copy') {
+    const state = userStates.get(chatId);
+    if (state?.packageData) {
+      const fullText = [
+        `ГОТОВЫЙ REELS: ${state.packageData.title || state.conceptData.concept}`,
+        '',
+        'SHOT LIST:',
+        ...state.packageData.scenes.map((s, i) =>
+          `${i + 1}. КАДР: ${s.visual} | РЕЧЬ: "${s.audio}"${s.text_on_screen ? ` | ТЕКСТ: ${s.text_on_screen}` : ''}`
+        ),
+        '',
+        'FULL SCRIPT:',
+        state.packageData.script,
+        '',
+        'CTA:',
+        state.packageData.cta,
+        '',
+        'CAPTION:',
+        state.packageData.caption,
+        '',
+        'COVER:',
+        ...state.packageData.cover.map((c, i) => `${i + 1}. ${c}`),
+        '',
+        'VERDICT:',
+        state.packageData.verdict
+      ].join('\n');
+
+      await bot.sendMessage(chatId, fullText);
+      await bot.answerCallbackQuery(callbackQuery.id, {
+        text: '✅ Скопировано! Вставь в заметки.'
+      });
+    }
+  }
+
+  if (data === 'save') {
+    await bot.answerCallbackQuery(callbackQuery.id, {
+      text: '💾 Сохранено! (пока в разработке)'
+    });
+  }
+
+  if (data === 'strengthen') {
+    const state = userStates.get(chatId);
+    if (state?.packageData?.weakness) {
+      await bot.sendMessage(chatId,
+        `🔨 *Сделать сильнее*\n\n` +
+        `Я вижу одну главную проблему:\n\n` +
+        `${state.packageData.weakness}\n\n` +
+        `Попробуй начать с другого хука или изменить первую сцену.`,
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      await bot.sendMessage(chatId,
+        `🔨 *Сделать сильнее*\n\n` +
+        `Пока всё выглядит хорошо. Попробуй немного сократить первую сцену — это улучшит удержание.`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+    await bot.answerCallbackQuery(callbackQuery.id);
+  }
+
+  if (data === 'new') {
+    await bot.sendMessage(chatId, '🔄 Отлично! Напиши новую идею.');
+    userStates.delete(chatId);
+    await bot.answerCallbackQuery(callbackQuery.id);
   }
 });
 
