@@ -21,7 +21,7 @@ services:
         sync: false
 
       - key: YANDEX_MODEL
-        value: yandexgpt-lite/latest
+        value: yandexgpt/latest
 
       - key: PUBLIC_URL
         sync: false
