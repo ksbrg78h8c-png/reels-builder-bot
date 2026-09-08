@@ -67,7 +67,30 @@ if (!allEnvVarsOk) {
 console.log('   ✅ Все переменные окружения заданы корректно');
 
 // ====================================================================
-// 4. ПРОВЕРКА ДОСТУПНОСТИ YANDEXGPT (тестовый запрос)
+// 4. ФУНКЦИЯ ОЧИСТКИ JSON ОТ МАРКДАУНА
+// ====================================================================
+function cleanJSON(content) {
+  console.log('   → Очищаем JSON от маркдауна и лишнего текста...');
+  
+  // Удаляем ```json ... ```
+  content = content.replace(/```json\s*/g, '');
+  content = content.replace(/```\s*/g, '');
+  
+  // Находим JSON-объект через регулярку
+  const match = content.match(/\{[\s\S]*\}/);
+  if (!match) {
+    throw new Error('JSON не найден в ответе');
+  }
+  content = match[0];
+  
+  content = content.trim();
+  
+  console.log('   ✅ JSON очищен');
+  return content;
+}
+
+// ====================================================================
+// 5. ПРОВЕРКА ДОСТУПНОСТИ YANDEXGPT
 // ====================================================================
 console.log('\n🔍 [3/6] ПРОВЕРКА ДОСТУПНОСТИ YANDEXGPT...');
 
@@ -108,7 +131,7 @@ async function testYandexConnection() {
 let yandexAvailable = false;
 
 // ====================================================================
-// 5. СОЗДАНИЕ КЛИЕНТА И БОТА
+// 6. СОЗДАНИЕ КЛИЕНТА И БОТА
 // ====================================================================
 console.log('\n🔍 [4/6] СОЗДАНИЕ КЛИЕНТОВ...');
 
@@ -129,7 +152,7 @@ try {
   console.log('   ✅ Telegram бот создан');
 
   // ====================================================================
-  // 6. ВЕБ-СЕРВЕР ДЛЯ RENDER
+  // 7. ВЕБ-СЕРВЕР ДЛЯ RENDER
   // ====================================================================
   console.log('\n🔍 [5/6] ЗАПУСК ВЕБ-СЕРВЕРА...');
   const app = express();
@@ -152,7 +175,7 @@ try {
   });
 
   // ====================================================================
-  // 7. ТЕСТОВЫЙ ЗАПРОС К YANDEXGPT
+  // 8. ТЕСТОВЫЙ ЗАПРОС К YANDEXGPT
   // ====================================================================
   console.log('\n🔍 [6/6] ВЫПОЛНЕНИЕ ТЕСТОВОГО ЗАПРОСА...');
   
@@ -171,7 +194,7 @@ try {
   }, 3000);
 
   // ====================================================================
-  // 8. КОМАНДЫ БОТА
+  // 9. КОМАНДЫ БОТА
   // ====================================================================
   bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
@@ -205,10 +228,13 @@ try {
   });
 
   // ====================================================================
-  // 9. ОСНОВНАЯ ЛОГИКА
+  // 10. ОСНОВНАЯ ЛОГИКА
   // ====================================================================
   const userStates = new Map();
 
+  // ====================================================================
+  // 11. ГЕНЕРАЦИЯ КОНЦЕПЦИИ И ХУКОВ
+  // ====================================================================
   async function generateConceptAndHooks(idea) {
     console.log('📤 Отправляем запрос к YandexGPT...');
     console.log(`   → Идея: "${idea}"`);
@@ -246,14 +272,20 @@ try {
       const response = await client.chat.completions.create({
         model: `gpt://${process.env.YANDEX_FOLDER_ID}/yandexgpt-lite/latest`,
         messages: [
-          { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.' },
+          { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь. Возвращай ТОЛЬКО JSON без пояснений.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.8,
         max_tokens: 2000
       });
+      
       console.log('   ✅ Ответ от YandexGPT получен');
-      return JSON.parse(response.choices[0].message.content);
+      const cleanedContent = cleanJSON(response.choices[0].message.content);
+      console.log('   → Парсим JSON...');
+      const result = JSON.parse(cleanedContent);
+      console.log('   ✅ JSON распарсен успешно');
+      return result;
+      
     } catch (error) {
       console.error('   ❌ ОШИБКА YandexGPT:');
       console.error(`   → ${error.message}`);
@@ -265,6 +297,9 @@ try {
     }
   }
 
+  // ====================================================================
+  // 12. ГЕНЕРАЦИЯ ГОТОВОГО ПАКЕТА
+  // ====================================================================
   async function generateReelsPackage(data) {
     console.log('📤 Генерируем пакет для Reels...');
     console.log(`   → Концепция: "${data.concept}"`);
@@ -305,14 +340,20 @@ try {
       const response = await client.chat.completions.create({
         model: `gpt://${process.env.YANDEX_FOLDER_ID}/yandexgpt-lite/latest`,
         messages: [
-          { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.' },
+          { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь. Возвращай ТОЛЬКО JSON без пояснений.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
         max_tokens: 4000
       });
-      console.log('   ✅ Пакет сгенерирован');
-      return JSON.parse(response.choices[0].message.content);
+      
+      console.log('   ✅ Ответ от YandexGPT получен');
+      const cleanedContent = cleanJSON(response.choices[0].message.content);
+      console.log('   → Парсим JSON...');
+      const result = JSON.parse(cleanedContent);
+      console.log('   ✅ JSON распарсен успешно');
+      return result;
+      
     } catch (error) {
       console.error('   ❌ ОШИБКА YandexGPT:');
       console.error(`   → ${error.message}`);
@@ -324,6 +365,9 @@ try {
     }
   }
 
+  // ====================================================================
+  // 13. ОБРАБОТКА СООБЩЕНИЙ
+  // ====================================================================
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text;
@@ -367,6 +411,9 @@ try {
     }
   });
 
+  // ====================================================================
+  // 14. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ
+  // ====================================================================
   bot.on('callback_query', async (callbackQuery) => {
     const chatId = callbackQuery.message.chat.id;
     const data = callbackQuery.data;
@@ -443,6 +490,7 @@ try {
       }
     }
 
+    // Копировать
     if (data === 'copy') {
       const state = userStates.get(chatId);
       if (state?.packageData) {
@@ -478,6 +526,7 @@ try {
       }
     }
 
+    // Сохранить
     if (data === 'save') {
       console.log(`   → Пользователь сохранил Reels`);
       await bot.answerCallbackQuery(callbackQuery.id, {
@@ -485,6 +534,7 @@ try {
       });
     }
 
+    // Сделать сильнее
     if (data === 'strengthen') {
       const state = userStates.get(chatId);
       console.log(`   → Пользователь запросил "Сделать сильнее"`);
@@ -506,6 +556,7 @@ try {
       await bot.answerCallbackQuery(callbackQuery.id);
     }
 
+    // Новый Reels
     if (data === 'new') {
       console.log(`   → Пользователь начал новый Reels`);
       await bot.sendMessage(chatId, '🔄 Отлично! Напиши новую идею.');
