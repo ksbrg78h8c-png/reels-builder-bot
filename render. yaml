@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: reels-builder-bot
+    runtime: node
+    buildCommand: npm install
+    startCommand: node index.js
