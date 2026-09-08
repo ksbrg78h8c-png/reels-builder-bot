@@ -21,7 +21,7 @@ const port = process.env.PORT || 3000;
 app.get('/', (req, res) => res.send('🤖 Reels Builder Bot is running!'));
 app.listen(port, () => console.log(`🌐 Web server running on port ${port}`));
 
-// --- ГЕНЕРАЦИЯ ЧЕРЕЗ YANDEXGPT (НОВЫЙ ФОРМАТ) ---
+// --- ГЕНЕРАЦИЯ КОНЦЕПЦИИ И ХУКОВ ---
 async function generateConceptAndHooks(idea) {
   const prompt = `
     Ты — эксперт по Instagram Reels.
@@ -65,6 +65,7 @@ async function generateConceptAndHooks(idea) {
   return JSON.parse(response.choices[0].message.content);
 }
 
+// --- ГЕНЕРАЦИЯ ГОТОВОГО ПАКЕТА ---
 async function generateReelsPackage(data) {
   const prompt = `
     Создай READY-TO-SHOOT PACKAGE для Instagram Reels:
