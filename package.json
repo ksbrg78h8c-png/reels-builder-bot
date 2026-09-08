@@ -8,6 +8,6 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "node-telegram-bot-api": "^0.66.0",
-    "openai": "^4.77.0"
+    "axios": "^1.7.9"
   }
 }
