@@ -1,60 +1,30 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
-const axios = require('axios');
+const OpenAI = require('openai');
 const express = require('express');
 
 const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-const YANDEX_API_KEY = process.env.YANDEX_API_KEY;
-const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID;
+// --- YANDEXGPT ЧЕРЕЗ OPENAI-СОВМЕСТИМЫЙ API ---
+const client = new OpenAI({
+  apiKey: process.env.YANDEX_API_KEY,
+  baseURL: 'https://ai.api.cloud.yandex.net/v1',
+  defaultHeaders: {
+    'OpenAI-Project': process.env.YANDEX_FOLDER_ID
+  }
+});
 
 // --- ФЕЙКОВЫЙ ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 const app = express();
 const port = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('🤖 Reels Builder Bot is running!'));
+app.listen(port, () => console.log(`🌐 Web server running on port ${port}`));
 
-app.get('/', (req, res) => {
-  res.send('🤖 Reels Builder Bot is running!');
-});
-
-app.listen(port, () => {
-  console.log(`🌐 Web server running on port ${port}`);
-});
-
-// --- YANDEXGPT ЗАПРОС ---
-
-async function callYandexGPT(prompt) {
-  const url = 'https://llm.api.cloud.yandex.net/yandexgpt/v1/completion';
-  
-  const response = await axios.post(url, {
-    model: 'yandexgpt',
-    messages: [
-      {
-        role: 'system',
-        text: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.'
-      },
-      {
-        role: 'user',
-        text: prompt
-      }
-    ],
-    temperature: 0.8,
-    maxTokens: 2000
-  }, {
-    headers: {
-      'Authorization': `Api-Key ${YANDEX_API_KEY}`,
-      'x-folder-id': YANDEX_FOLDER_ID,
-      'Content-Type': 'application/json'
-    }
-  });
-
-  return response.data.result.alternatives[0].message.text;
-}
-
-// --- ГЕНЕРАЦИЯ КОНЦЕПЦИИ И ХУКОВ ---
-
+// --- ГЕНЕРАЦИЯ ЧЕРЕЗ YANDEXGPT (НОВЫЙ ФОРМАТ) ---
 async function generateConceptAndHooks(idea) {
   const prompt = `
+    Ты — эксперт по Instagram Reels.
     Определи для идеи пользователя:
     1. Концепцию (одна фраза, суть)
     2. Формат (Talking Head / Faceless / Storytelling)
@@ -82,11 +52,18 @@ async function generateConceptAndHooks(idea) {
     Идея: ${idea}
   `;
 
-  const result = await callYandexGPT(prompt);
-  return JSON.parse(result);
-}
+  const response = await client.chat.completions.create({
+    model: 'yandexgpt-lite',
+    messages: [
+      { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.' },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.8,
+    max_tokens: 2000
+  });
 
-// --- ГЕНЕРАЦИЯ ГОТОВОГО ПАКЕТА ---
+  return JSON.parse(response.choices[0].message.content);
+}
 
 async function generateReelsPackage(data) {
   const prompt = `
@@ -120,22 +97,24 @@ async function generateReelsPackage(data) {
     - Не обещай вирусность
   `;
 
-  const result = await callYandexGPT(prompt);
-  return JSON.parse(result);
+  const response = await client.chat.completions.create({
+    model: 'yandexgpt-lite',
+    messages: [
+      { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.' },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.7,
+    max_tokens: 4000
+  });
+
+  return JSON.parse(response.choices[0].message.content);
 }
 
 // --- КОМАНДЫ БОТА ---
-
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId,
-    `🎬 *Reels Builder*\n\n` +
-    `Из идеи — в готовый Reels.\n\n` +
-    `Просто напиши, что хочешь снять.\n\n` +
-    `*Примеры:*\n` +
-    `📱 "Как перестать откладывать"\n` +
-    `💼 "Кейс из моей практики"\n` +
-    `🔥 "Ошибка, которую я совершал"`,
+    `🎬 *Reels Builder*\n\nИз идеи — в готовый Reels.\n\nПросто напиши, что хочешь снять.\n\n*Примеры:*\n📱 "Как перестать откладывать"\n💼 "Кейс из моей практики"\n🔥 "Ошибка, которую я совершал"`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -143,13 +122,7 @@ bot.onText(/\/start/, async (msg) => {
 bot.onText(/\/help/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId,
-    `📖 *Как пользоваться:*\n\n` +
-    `1. Напиши идею для Reels\n` +
-    `2. Выбери хук из трёх вариантов\n` +
-    `3. Получи готовый план: Shot List, сценарий, CTA, обложки\n\n` +
-    `*Команды:*\n` +
-    `/start — приветствие\n` +
-    `/help — помощь`,
+    `📖 *Как пользоваться:*\n\n1. Напиши идею для Reels\n2. Выбери хук из трёх вариантов\n3. Получи готовый план: Shot List, сценарий, CTA, обложки\n\n*Команды:*\n/start — приветствие\n/help — помощь`,
     { parse_mode: 'Markdown' }
   );
 });
