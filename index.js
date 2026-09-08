@@ -2,28 +2,42 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const OpenAI = require('openai');
 const express = require('express');
+const dns = require('dns');
+
+// ===== ПРОВЕРКА DNS (Render) =====
+dns.resolve('ai.api.cloud.yandex.net', (err, addresses) => {
+  if (err) {
+    console.error('❌ DNS ОШИБКА:', err.message);
+  } else {
+    console.log('✅ DNS РАБОТАЕТ:', addresses);
+  }
+});
 
 console.log('🔍 Переменные окружения:');
 console.log('YANDEX_API_KEY:', process.env.YANDEX_API_KEY ? '✅ Есть' : '❌ Нет');
 console.log('YANDEX_FOLDER_ID:', process.env.YANDEX_FOLDER_ID ? '✅ Есть' : '❌ Нет');
 console.log('TELEGRAM_TOKEN:', process.env.TELEGRAM_TOKEN ? '✅ Есть' : '❌ Нет');
 
+// ===== КОНФИГУРАЦИЯ =====
 const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
 const client = new OpenAI({
   apiKey: process.env.YANDEX_API_KEY,
-  baseURL: 'https://api.ai.cloud.yandex.net/v1',
+  baseURL: 'https://ai.api.cloud.yandex.net/v1',
   defaultHeaders: {
-    'x-folder-id': process.env.YANDEX_FOLDER_ID
+    'x-folder-id': process.env.YANDEX_FOLDER_ID,
+    'x-project': process.env.YANDEX_FOLDER_ID,
   }
 });
 
+// ===== ВЕБ-СЕРВЕР ДЛЯ RENDER =====
 const app = express();
 const port = process.env.PORT || 3000;
 app.get('/', (req, res) => res.send('🤖 Reels Builder Bot is running!'));
 app.listen(port, () => console.log(`🌐 Web server running on port ${port}`));
 
+// ===== ГЕНЕРАЦИЯ КОНЦЕПЦИИ И ХУКОВ =====
 async function generateConceptAndHooks(idea) {
   console.log('📤 Отправляем запрос к YandexGPT...');
   const prompt = `
@@ -65,7 +79,7 @@ async function generateConceptAndHooks(idea) {
       temperature: 0.8,
       max_tokens: 2000
     });
-    console.log('✅ Ответ получен');
+    console.log('✅ Ответ от YandexGPT получен');
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
     console.error('❌ Ошибка YandexGPT:', error.message);
@@ -73,10 +87,14 @@ async function generateConceptAndHooks(idea) {
       console.error('Статус:', error.response.status);
       console.error('Данные:', error.response.data);
     }
+    if (error.cause) {
+      console.error('Причина:', error.cause.message);
+    }
     throw error;
   }
 }
 
+// ===== ГЕНЕРАЦИЯ ГОТОВОГО ПАКЕТА =====
 async function generateReelsPackage(data) {
   const prompt = `
     Создай READY-TO-SHOOT PACKAGE для Instagram Reels:
@@ -130,7 +148,7 @@ async function generateReelsPackage(data) {
   }
 }
 
-// --- КОМАНДЫ БОТА ---
+// ===== КОМАНДЫ БОТА =====
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId,
