@@ -3,26 +3,29 @@ const TelegramBot = require('node-telegram-bot-api');
 const OpenAI = require('openai');
 const express = require('express');
 
+console.log('🔍 Переменные окружения:');
+console.log('YANDEX_API_KEY:', process.env.YANDEX_API_KEY ? '✅ Есть' : '❌ Нет');
+console.log('YANDEX_FOLDER_ID:', process.env.YANDEX_FOLDER_ID ? '✅ Есть' : '❌ Нет');
+console.log('TELEGRAM_TOKEN:', process.env.TELEGRAM_TOKEN ? '✅ Есть' : '❌ Нет');
+
 const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-// --- YANDEXGPT ЧЕРЕЗ OPENAI-СОВМЕСТИМЫЙ API ---
 const client = new OpenAI({
   apiKey: process.env.YANDEX_API_KEY,
-  baseURL: 'https://ai.api.cloud.yandex.net/v1',
+  baseURL: 'https://api.ai.cloud.yandex.net/v1',
   defaultHeaders: {
-    'OpenAI-Project': process.env.YANDEX_FOLDER_ID
+    'x-folder-id': process.env.YANDEX_FOLDER_ID
   }
 });
 
-// --- ФЕЙКОВЫЙ ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 const app = express();
 const port = process.env.PORT || 3000;
 app.get('/', (req, res) => res.send('🤖 Reels Builder Bot is running!'));
 app.listen(port, () => console.log(`🌐 Web server running on port ${port}`));
 
-// --- ГЕНЕРАЦИЯ КОНЦЕПЦИИ И ХУКОВ ---
 async function generateConceptAndHooks(idea) {
+  console.log('📤 Отправляем запрос к YandexGPT...');
   const prompt = `
     Ты — эксперт по Instagram Reels.
     Определи для идеи пользователя:
@@ -52,20 +55,28 @@ async function generateConceptAndHooks(idea) {
     Идея: ${idea}
   `;
 
-  const response = await client.chat.completions.create({
-    model: 'yandexgpt-lite',
-    messages: [
-      { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.' },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.8,
-    max_tokens: 2000
-  });
-
-  return JSON.parse(response.choices[0].message.content);
+  try {
+    const response = await client.chat.completions.create({
+      model: `gpt://${process.env.YANDEX_FOLDER_ID}/yandexgpt-lite/latest`,
+      messages: [
+        { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 2000
+    });
+    console.log('✅ Ответ получен');
+    return JSON.parse(response.choices[0].message.content);
+  } catch (error) {
+    console.error('❌ Ошибка YandexGPT:', error.message);
+    if (error.response) {
+      console.error('Статус:', error.response.status);
+      console.error('Данные:', error.response.data);
+    }
+    throw error;
+  }
 }
 
-// --- ГЕНЕРАЦИЯ ГОТОВОГО ПАКЕТА ---
 async function generateReelsPackage(data) {
   const prompt = `
     Создай READY-TO-SHOOT PACKAGE для Instagram Reels:
@@ -98,17 +109,25 @@ async function generateReelsPackage(data) {
     - Не обещай вирусность
   `;
 
-  const response = await client.chat.completions.create({
-    model: 'yandexgpt-lite',
-    messages: [
-      { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.' },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.7,
-    max_tokens: 4000
-  });
-
-  return JSON.parse(response.choices[0].message.content);
+  try {
+    const response = await client.chat.completions.create({
+      model: `gpt://${process.env.YANDEX_FOLDER_ID}/yandexgpt-lite/latest`,
+      messages: [
+        { role: 'system', content: 'Ты — эксперт по Instagram Reels. Отвечай только на русском языке. Используй живую, разговорную речь.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 4000
+    });
+    return JSON.parse(response.choices[0].message.content);
+  } catch (error) {
+    console.error('❌ Ошибка YandexGPT:', error.message);
+    if (error.response) {
+      console.error('Статус:', error.response.status);
+      console.error('Данные:', error.response.data);
+    }
+    throw error;
+  }
 }
 
 // --- КОМАНДЫ БОТА ---
