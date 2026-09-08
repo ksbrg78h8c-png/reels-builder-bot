@@ -2,5 +2,29 @@ services:
   - type: web
     name: reels-builder-bot
     runtime: node
+    plan: free
+
     buildCommand: npm install
-    startCommand: node index.js
+    startCommand: npm start
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: TELEGRAM_TOKEN
+        sync: false
+
+      - key: YANDEX_API_KEY
+        sync: false
+
+      - key: YANDEX_FOLDER_ID
+        sync: false
+
+      - key: YANDEX_MODEL
+        value: yandexgpt-lite/latest
+
+      - key: PUBLIC_URL
+        sync: false
+
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
